@@ -37,11 +37,11 @@ namespace PhotoOrganizer
                 {12,"12 - Diciembre" }
             }; // Could expand by using CultureInfo to generate this data.
 
-            DirectoryInfo media_dir = new DirectoryInfo(@"A:\OneDrive\Imágenes\Álbum de cámara\Desorden");
-            string output_dir = @"A:\OneDrive\Imágenes\Álbum de cámara\Orden";
+            DirectoryInfo media_dir = new DirectoryInfo(@"A:\OneDrive\Imágenes\Desorden\");
+            string output_dir = @"A:\OneDrive\Imágenes\output\";
 
 
-         
+           
 
             FileInfo[] media = media_dir.GetFiles("*.*", SearchOption.AllDirectories);
 
@@ -60,7 +60,7 @@ namespace PhotoOrganizer
                 DateTime dating_of_media = new DateTime(); // reuse this to reduce stress of GC
                 for (int i = 0; i < media.Length; i++)
                 {
-                    Log($"Indexing {media[i].FullName}"); 
+                    Log($"Indexing {media[i].FullName}");
                     pbar.Tick($"Indexing {media[i].FullName}");
 
 
@@ -94,10 +94,10 @@ namespace PhotoOrganizer
 
                 }
             }
-                
+
 
             // Directory tree generation.
-            using (var pbar = new ProgressBar((highest_year-lowest_year)*12, "Moving Files...", ProgressOptions))
+            using (var pbar = new ProgressBar((highest_year - lowest_year) * 12, "Moving Files...", ProgressOptions))
             {
                 DirectoryInfo output = Directory.CreateDirectory(output_dir);
                 if (output.GetFiles().Length > 0)
@@ -121,7 +121,7 @@ namespace PhotoOrganizer
                 }
 
             }
-            
+
 
             // Moving media files to new directory
             using (var pbar = new ProgressBar(DatedMedia.Length, "Moving Files...", ProgressOptions))
@@ -138,7 +138,7 @@ namespace PhotoOrganizer
                     Log($"Moving {DatedMedia[i].File.FullName} to {final_path}");
                     pbar.Tick($"Moving {DatedMedia[i].File.Name} ...");
                     try
-                    { 
+                    {
                         DatedMedia[i].File.MoveTo(final_path);
                     }
                     catch (IOException)
@@ -153,7 +153,7 @@ namespace PhotoOrganizer
                                 output_dir,
                                 DatedMedia[i].Dating.Year.ToString(),
                                 Months[DatedMedia[i].Dating.Month],
-                                (rng.Next(0,1000000).ToString() + DatedMedia[i].File.Name)
+                                (rng.Next(0, 1000000).ToString() + DatedMedia[i].File.Name)
                             );
                             Log($"New file name: {NewPath}");
                             DatedMedia[i].File.MoveTo(NewPath);
@@ -167,8 +167,8 @@ namespace PhotoOrganizer
                 }
             }
 
-            FindEmptyDirectories(new DirectoryInfo(output_dir));
 
+            DeleteEmptyDirectories(new DirectoryInfo(output_dir));
 
             Console.WriteLine("Press any key to exit!");
             Console.ReadKey();
@@ -192,44 +192,66 @@ namespace PhotoOrganizer
             File.AppendAllText($"{application_start_time}_PhotoOrganizerLog.txt", $"\n[{DateTime.Now}]\t" + text);
         }
 
-        private static void FindEmptyDirectories(DirectoryInfo RootDirectory)
+        private static void DeleteEmptyDirectories(DirectoryInfo directory)
         {
-            List<DirectoryInfo> empty_dirs = new List<DirectoryInfo>();
+            List<DirectoryInfo> year_deletion_queue = new List<DirectoryInfo>();
+            List<DirectoryInfo> month_deletion_queue = new List<DirectoryInfo>();
 
-            var dirs = RootDirectory.GetDirectories("*",SearchOption.TopDirectoryOnly);
-            foreach(var dir in dirs)
+            using (var pbar = new ProgressBar(directory.GetDirectories("*", SearchOption.AllDirectories).Length, "Searching for Empty Directories...", ProgressOptions))
             {
-                var files = dir.GetFiles("*.*",SearchOption.AllDirectories);
-                long folder_size = 0;
-                foreach(FileInfo file in files)
-                {
-                    folder_size += file.Length;
-                }
-                if(folder_size == 0)
-                {
-                    Console.WriteLine($"Directory is empty: {dir.FullName}");
-                    empty_dirs.Add(dir);
-                }
+                var dirs = directory.GetDirectories("*", SearchOption.TopDirectoryOnly);
 
-            }
 
-            Console.WriteLine("Delete empty directories? (yes/no)");
-            string answer = Console.ReadLine();
-            if(answer == "yes")
-            {
-                foreach(var dir in empty_dirs)
+
+                // year folders
+                foreach (DirectoryInfo year_dir in dirs)
                 {
-                    var sub_dirs = dir.GetDirectories();
+                    var sub_dirs = year_dir.GetDirectories("*", SearchOption.TopDirectoryOnly);
 
-                    foreach(var sub in sub_dirs)
+                    // month folders
+                    foreach (DirectoryInfo month_dir in sub_dirs)
                     {
-                        sub.Delete();
+                        if (month_dir.GetFiles("*", SearchOption.AllDirectories).Length == 0)
+                        {
+                            month_deletion_queue.Add(month_dir);
+                        }
+
                     }
 
+                    if (year_dir.GetFiles("*", SearchOption.AllDirectories).Length == 0)
+                    {
+                        year_deletion_queue.Add(year_dir);
+                    }
+
+                }
+            }
+
+            Log("DIRECTORIES DELETION LOG");
+            // bars dont work you forgot to tick
+            using (var pbar = new ProgressBar(month_deletion_queue.Count + year_deletion_queue.Count, "Deleting Empty Directories...", ProgressOptions))
+            {
+                foreach (DirectoryInfo dir in month_deletion_queue)
+                {
+                    Log($"Deleted {dir.FullName}");
+                    dir.Delete();
+
+                }
+
+
+                foreach (DirectoryInfo dir in year_deletion_queue)
+                {
+                    Log($"Deleted {dir.FullName}");
                     dir.Delete();
                 }
-                Console.WriteLine("Deletion Finished");
+
             }
+
+
+
+
+
         }
+
+
     }
 }
